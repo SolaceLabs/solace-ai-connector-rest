@@ -1,0 +1,56 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[project]
+name = "solace-ai-connector-rest"
+dynamic = ["version"]
+authors = [
+  { name="Edward Funnekotter", email="edward.funnekotter@solace.com" },
+  { name="Greg Meldrum", email="greg.meldrum@solace.com" },
+  { name="Cyrus Mobini", email="cyrus.mobini@solace.com" },
+]
+description = "rest plugin for the Solace AI Connector - this provides an input and output component to talk to rest interface"
+readme = "README.md"
+requires-python = ">=3.11"
+classifiers = [
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "flask>=3.0.3",
+    "requests_oauthlib==2.0.0",
+    "solace_ai_connector>=0.1.3",
+    "ratelimit~=2.2.1",
+    "Flask-Cors~=5.0.0",
+    "solace-ai-connector-web",
+]
+
+[project.urls]
+homepage = "https://github.com/SolaceLabs/solace-ai-connector-rest"
+repository = "https://github.com/SolaceLabs/solace-ai-connector-rest"
+documentation = "https://github.com/SolaceLabs/solace-ai-rest/blob/main/docs/components/index.md"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/solace_ai_connector_rest"]
+
+
+[tool.hatch.version]
+path = "src/solace_ai_connector_rest/__init__.py"
+
+[tool.ruff]
+lint.select = ["E4", "E7", "E9", "F"]
+lint.ignore = ["F401", "E731"]
+
+[tool.hatch.envs.hatch-test]
+installer = "pip"
+
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.11", "3.12"]

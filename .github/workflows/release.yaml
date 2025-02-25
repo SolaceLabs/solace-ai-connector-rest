@@ -1,0 +1,28 @@
+name: Release
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        type: choice
+        required: true
+        description: "Version bump type"
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  id-token: write
+  checks: write
+  contents: write
+
+jobs:
+  release:
+    uses: SolaceDev/solace-public-workflows/.github/workflows/hatch_release_pypi.yml@main
+    with:
+      ENVIRONMENT: pypi
+      version: ${{ github.event.inputs.version }}
+      pypi-project: solace-ai-connector-rest
+    secrets:
+      COMMIT_KEY: ${{ secrets.COMMIT_KEY }}
+      PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}

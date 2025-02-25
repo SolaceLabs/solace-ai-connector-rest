@@ -1,0 +1,7 @@
+# Built-in Components
+
+| Component | Description |
+| --- | --- |
+| [rest_input](rest_input.md) | Rest input component. When a message is sent by the user, the RestReceiver class picks it up in the register_handler function using `@app.route()` from flask. The message is then sent to the broker to be processed by the chatbot. Then rest_input.py awaits for a response on a cached output queue. When it receives a response, it calls a function to return the message back to the user. This process of listening for messages from the output_queue is done until a response_complete flag is set to True and rest_input.py will stop listening to the output queue and send the final response to the user. |
+| [rest_output](rest_output.md) | Rest output component. Once the chatbot has responded, the response is received in here where some processing is done, before it is sent through the cached output_queue back to rest_input.py where it will be displayed to the user.To allow for the user to send a new request, the 'response_complete' flag is required to be sent. This allows rest_input.py to stop looping and exit. |
+| [oauth_authentication](oauth_authentication.md) | OAuth authentication component that handles user authentication through various OAuth providers (Google, Azure). Provides endpoints for login, token refresh, user info retrieval and token validation. Supports configurable authentication settings including client credentials and HTTPS. |
