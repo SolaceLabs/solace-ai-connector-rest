@@ -6,7 +6,7 @@ from typing import Any, Dict, Generator
 from uuid import uuid4
 from werkzeug.utils import secure_filename
 from flask import request, Response
-import timeout_decorator
+from timeout_decorator import timeout, TimeoutError
 from ratelimit import limits, sleep_and_retry
 from solace_ai_connector.common.message import Message
 from solace_ai_connector.common.event import Event, EventType
