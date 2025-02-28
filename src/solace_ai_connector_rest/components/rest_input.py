@@ -6,6 +6,7 @@ from typing import Any, Dict, Generator
 from uuid import uuid4
 from werkzeug.utils import secure_filename
 from flask import request, Response
+import timeout_decorator
 from ratelimit import limits, sleep_and_retry
 from solace_ai_connector.common.message import Message
 from solace_ai_connector.common.event import Event, EventType
@@ -178,6 +179,7 @@ class RestInput(RestBase):
         @self.app.route(self.endpoint, methods=["POST"])
         @sleep_and_retry
         @limits(self.rate_limit, self._rate_limit_time_period)
+        @timeout(90)
         def request_handler():
             prompt = request.form.get("prompt")
             stream = request.form.get("stream")
