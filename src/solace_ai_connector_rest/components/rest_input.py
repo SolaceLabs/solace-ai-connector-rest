@@ -15,7 +15,7 @@ from solace_ai_connector.common.log import log
 from .rest_base import RestBase, info as base_info
 from .utils import create_api_response, get_user_info
 
-# Constants
+# Define constants
 REQUEST_TIMEOUT_MESSAGE = "Request timed out"
 
 # Clone and modify the info dictionary
