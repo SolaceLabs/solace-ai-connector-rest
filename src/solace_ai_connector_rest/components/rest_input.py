@@ -175,8 +175,6 @@ class RestInput(RestBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.listen_port = self.get_config("listen_port", 5050)
-        self._rate_limit_time_period = 60  # in seconds
 
     def _load_config(self):
         """Load configuration parameters."""
@@ -188,6 +186,10 @@ class RestInput(RestBase):
         self.authentication_enabled = self.authentication.get("enabled", False)
         if self.authentication_enabled:
             self.authentication_server = self.authentication.get("server")
+        
+        self.listen_port = self.get_config("listen_port", 5050)
+        self._rate_limit_time_period = 60  # in seconds
+
 
     def _create_request_handler(self):
         """Create and return the request handler function."""
