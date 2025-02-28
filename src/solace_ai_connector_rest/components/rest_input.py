@@ -3,7 +3,7 @@ import json
 import uuid
 import threading
 from queue import Queue, Empty
-from typing import Any, Dict, Generator
+from typing import Any, Dict, Generator, Tuple
 from uuid import uuid4
 from werkzeug.utils import secure_filename
 from flask import request, Response
@@ -14,6 +14,9 @@ from solace_ai_connector.common.log import log
 
 from .rest_base import RestBase, info as base_info
 from .utils import create_api_response, get_user_info
+
+# Constants
+REQUEST_TIMEOUT_MESSAGE = "Request timed out"
 
 # Clone and modify the info dictionary
 info = base_info.copy()
@@ -173,12 +176,10 @@ class RestInput(RestBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.listen_port = self.get_config("listen_port", 5050)
-
-
-    def register_routes(self):
-        """Register the routes for the REST API server."""
-
         self._rate_limit_time_period = 60  # in seconds
+
+    def _load_config(self):
+        """Load configuration parameters."""
         self.endpoint = self.get_config("endpoint", "/api/v1/request")
         self.rate_limit = int(self.get_config("rate_limit", 100))
         self.request_timeout = int(self.get_config("request_timeout", 90))
@@ -188,107 +189,155 @@ class RestInput(RestBase):
         if self.authentication_enabled:
             self.authentication_server = self.authentication.get("server")
 
-        @self.app.route(self.endpoint, methods=["POST"])
+    def _create_request_handler(self):
+        """Create and return the request handler function."""
+        def error_handler(error):
+            """Handle different types of errors and return appropriate responses."""
+            if isinstance(error, RequestTimeoutError):
+                return create_api_response(REQUEST_TIMEOUT_MESSAGE, 408)
+            log.error(f"Error processing request: {str(error)}")
+            return create_api_response(f"Internal server error: {str(error)}", 500)
+
         @sleep_and_retry
         @limits(self.rate_limit, self._rate_limit_time_period)
         def request_handler():
             try:
-                prompt = request.form.get("prompt")
-                stream = request.form.get("stream")
-                session_id = request.form.get("session_id")
-
-                if not prompt or not stream:
-                    return create_api_response(
-                        "Missing required form parameters: 'prompt' and 'stream'",
-                        400,
-                    )
-
-                if stream.lower() == "true":
-                    stream = True
-                else:
-                    stream = False
-
-                user_id = "default"
-                user_email = "default"
-                if self.authentication_enabled:
-                    auth_header = request.headers.get("Authorization")
-                    if not auth_header or not auth_header.startswith("Bearer "):
-                        return create_api_response("No token provided", 400)
-
-                    token_id = auth_header.split("Bearer ")[1]
-
-                    # authenticate by the token
-                    resp, status_code = get_user_info(self.authentication_server, token_id)
-                    log.debug(f"Authentication response code: {status_code}")
-                    if status_code != 200:
-                        return create_api_response(
-                            "Authentication failed.",
-                            status_code,
-                        )
-                    log.debug("Successfully logged in.")
-
-                    user_id = resp["user_id"]
-                    user_email = resp["email"]
-
-                # optional payload parameters
-                files = request.files.getlist("files")
-
-                file_details = []
-                for file in files:
-                    if file.filename == "":
-                        continue
-
-                    filename = secure_filename(file.filename)
-                    content = file.read()
-                    mime_type = file.mimetype
-
-                    size = len(content)
-                    file_details.append(
-                        {
-                            "name": filename,
-                            "content": content,
-                            "mime_type": mime_type,
-                            "size": size,
-                        }
-                    )
-
-                # create a queue to store the response
-                response_queue = Queue()
-                server_input_id = str(uuid4())
-                self.kv_store_set(
-                    f"server_input:{server_input_id}:response_queue", response_queue
-                )
-
-                # encode request in an event
-                event = {
-                    "text": prompt,
-                    "user_id": user_id,
-                    "user_email": user_email,
-                    "stream": stream,
-                    "files": file_details,
-                    "timestamp": time.time(),
-                    "session_id": session_id,
-                }
-
-                # send the event to the cognitive mesh
-                self.handle_event(server_input_id, event)
-
-                # listen to the response queue and return the response
-                if stream:
-                    return Response(
-                        self.generate_stream_response(
-                            server_input_id, event, response_queue
-                        ),
-                        content_type="text/event-stream",
-                    )
-                else:
-                    return self.generate_simple_response(server_input_id, response_queue)
-                    
-            except RequestTimeoutError:
-                return create_api_response("Request timed out", 408)
+                return self._process_request()
             except Exception as e:
-                log.error(f"Error processing request: {str(e)}")
-                return create_api_response(f"Internal server error: {str(e)}", 500)
+                return error_handler(e)
+        
+        return request_handler
+
+    def _process_request(self):
+        """Process the incoming request."""
+        # Validate and parse request parameters
+        prompt, stream, session_id = self._parse_request_params()
+        
+        # Handle authentication if enabled
+        user_id, user_email = self._handle_authentication()
+        
+        # Process any uploaded files
+        file_details = self._process_uploaded_files()
+        
+        # Set up response queue and prepare event
+        response_queue, server_input_id, event = self._prepare_response_queue(
+            prompt, user_id, user_email, stream, file_details, session_id
+        )
+        
+        # Send event to cognitive mesh
+        self.handle_event(server_input_id, event)
+        
+        # Return appropriate response based on stream flag
+        return self._generate_response(server_input_id, event, response_queue, stream)
+
+    def register_routes(self):
+        """Register the routes for the REST API server."""
+        self._load_config()
+        handler = self._create_request_handler()
+        self.app.route(self.endpoint, methods=["POST"])(handler)
+
+    def _parse_request_params(self) -> Tuple[str, bool, str]:
+        """Parse and validate the request parameters."""
+        prompt = request.form.get("prompt")
+        stream = request.form.get("stream")
+        session_id = request.form.get("session_id")
+
+        if not prompt or not stream:
+            raise ValueError("Missing required form parameters: 'prompt' and 'stream'")
+
+        if stream.lower() == "true":
+            stream = True
+        else:
+            stream = False
+            
+        return prompt, stream, session_id
+
+    def _handle_authentication(self) -> Tuple[str, str]:
+        """Handle authentication if enabled and return user_id and user_email."""
+        user_id = "default"
+        user_email = "default"
+        
+        if not self.authentication_enabled:
+            return user_id, user_email
+            
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            raise ValueError("No token provided")
+
+        token_id = auth_header.split("Bearer ")[1]
+
+        # authenticate by the token
+        resp, status_code = get_user_info(self.authentication_server, token_id)
+        log.debug(f"Authentication response code: {status_code}")
+        if status_code != 200:
+            raise ValueError("Authentication failed")
+            
+        log.debug("Successfully logged in.")
+        return resp["user_id"], resp["email"]
+
+    def _process_uploaded_files(self) -> list:
+        """Process any uploaded files and return file details."""
+        files = request.files.getlist("files")
+        file_details = []
+        
+        for file in files:
+            if file.filename == "":
+                continue
+
+            filename = secure_filename(file.filename)
+            content = file.read()
+            mime_type = file.mimetype
+
+            size = len(content)
+            file_details.append(
+                {
+                    "name": filename,
+                    "content": content,
+                    "mime_type": mime_type,
+                    "size": size,
+                }
+            )
+            
+        return file_details
+
+    def _prepare_response_queue(
+        self, prompt: str, user_id: str, user_email: str, stream: bool, 
+        file_details: list, session_id: str
+    ) -> Tuple[Queue, str, dict]:
+        """Set up response queue and prepare event."""
+        # create a queue to store the response
+        response_queue = Queue()
+        server_input_id = str(uuid4())
+        self.kv_store_set(
+            f"server_input:{server_input_id}:response_queue", response_queue
+        )
+
+        # encode request in an event
+        event = {
+            "text": prompt,
+            "user_id": user_id,
+            "user_email": user_email,
+            "stream": stream,
+            "files": file_details,
+            "timestamp": time.time(),
+            "session_id": session_id,
+        }
+        
+        return response_queue, server_input_id, event
+
+    def _generate_response(
+        self, server_input_id: str, event: dict, response_queue: Queue, stream: bool
+    ) -> Response:
+        """Generate appropriate response based on stream flag."""
+        if stream:
+            return Response(
+                self.generate_stream_response(
+                    server_input_id, event, response_queue
+                ),
+                content_type="text/event-stream",
+            )
+        else:
+            return self.generate_simple_response(server_input_id, response_queue)
 
     def handle_event(self, server_input_id: int, event: Dict[str, Any]) -> None:
         payload = {
@@ -330,7 +379,7 @@ class RestInput(RestBase):
             # Otherwise, put a timeout message in the queue
             response_queue.put({
                 "text": "",
-                "status_message": "Request timed out",
+                "status_message": REQUEST_TIMEOUT_MESSAGE,
                 "response_complete": True
             })
         
@@ -382,7 +431,7 @@ class RestInput(RestBase):
         while not self.stop_signal.is_set():
             # Check if we've exceeded the timeout
             if time.time() - start_time > self.request_timeout:
-                raise RequestTimeoutError("Request timed out")
+                raise RequestTimeoutError(REQUEST_TIMEOUT_MESSAGE)
                 
             try:
                 response = response_queue.get(timeout=1)
