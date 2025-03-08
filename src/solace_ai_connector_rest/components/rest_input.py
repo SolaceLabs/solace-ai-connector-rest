@@ -13,6 +13,7 @@ from solace_ai_connector.common.log import log
 
 from .rest_base import RestBase, info as base_info
 from .utils import create_api_response, get_user_info
+from .openai_handlers import register_openai_routes
 
 # Clone and modify the info dictionary
 info = base_info.copy()
@@ -60,6 +61,12 @@ info["config_parameters"].extend(
                     "description": ("Maximum rate of requests per seconds."),
                     "required": False,
                     "default": 1000000,
+                },
+                "enable_openai_endpoint": {
+                    "type": "boolean",
+                    "description": "Enable OpenAI-compatible endpoint",
+                    "required": False,
+                    "default": False,
                 },
             },
             "description": "REST API configuration parameters.",
@@ -169,6 +176,7 @@ class RestInput(RestBase):
         self._rate_limit_time_period = 60  # in seconds
         self.endpoint = self.get_config("endpoint", "/api/v1/request")
         self.rate_limit = int(self.get_config("rate_limit", 100))
+        self.enable_openai_endpoint = self.get_config("enable_openai_endpoint", False)
 
         self.authentication = self.get_config("authentication", {})
         self.authentication_enabled = self.authentication.get("enabled", False)
@@ -269,6 +277,10 @@ class RestInput(RestBase):
                 )
             else:
                 return self.generate_simple_response(server_input_id, response_queue)
+        
+        # Register OpenAI-compatible endpoints if enabled
+        if self.enable_openai_endpoint:
+            register_openai_routes(self.app, self, self.rate_limit, self._rate_limit_time_period)
 
     def handle_event(self, server_input_id: int, event: Dict[str, Any]) -> None:
         payload = {
