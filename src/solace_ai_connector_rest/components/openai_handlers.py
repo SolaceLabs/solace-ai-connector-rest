@@ -15,7 +15,6 @@ def register_openai_routes(app, component, rate_limit, rate_limit_time_period):
     
     @app.route("/v1/chat/completions", methods=["POST"])
     @app.route("/chat/completions", methods=["POST"])
-    @app.route("/api/chat/completions", methods=["POST"])
     @sleep_and_retry
     @limits(rate_limit, rate_limit_time_period)
     def openai_request_handler():
