@@ -82,7 +82,7 @@ def handle_event_openai(component, server_input_id, event):
 
 def generate_stream_response_openai(component, server_input_id, event, response_queue):
     """Generate a streaming response for OpenAI-compatible requests."""
-    model = event.get("model", "cognitive-mesh")
+    model = event.get("model", "solace-agent-mesh")
     while not component.stop_signal.is_set():
         try:
             response = response_queue.get(timeout=1)
@@ -114,7 +114,7 @@ def generate_stream_response_openai(component, server_input_id, event, response_
 
 def generate_simple_response_openai(component, server_input_id, event, response_queue):
     """Generate a simple (non-streaming) response for OpenAI-compatible requests."""
-    model = event.get("model", "gpt-3.5-turbo")
+    model = event.get("model", "solace-agent-mesh")
     full_response = ""
     while not component.stop_signal.is_set():
         try:
