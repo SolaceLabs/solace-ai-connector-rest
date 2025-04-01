@@ -2,6 +2,7 @@ import queue
 from abc import abstractmethod
 from flask import Flask
 from flask_cors import CORS
+from waitress import serve
 from solace_ai_connector.components.component_base import ComponentBase
 from solace_ai_connector.common.message import Message
 from solace_ai_connector.common.event import Event, EventType
@@ -68,7 +69,7 @@ class RestBase(ComponentBase):
         self.register_routes()
 
     def run(self):
-        self.app.run(host=self.host, port=self.listen_port)
+        serve(self.app, host=self.host, port=self.listen_port)
 
     def stop_component(self):
         func = self.app.config.get("werkzeug.server.shutdown")
