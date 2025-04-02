@@ -59,6 +59,7 @@ class RestBase(ComponentBase):
 
     def init_app(self):
         self.app = Flask(__name__)
+        self.app.env = 'production'
         CORS(self.app)
         
         # Add health check endpoint
