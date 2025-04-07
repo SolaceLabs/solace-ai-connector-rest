@@ -2,7 +2,7 @@ import queue
 from abc import abstractmethod
 from flask import Flask
 from flask_cors import CORS
-from waitress import serve
+from gevent.pywsgi import WSGIServer
 from solace_ai_connector.components.component_base import ComponentBase
 from solace_ai_connector.common.message import Message
 from solace_ai_connector.common.event import Event, EventType
@@ -70,7 +70,8 @@ class RestBase(ComponentBase):
         self.register_routes()
 
     def run(self):
-        serve(self.app, host=self.host, port=self.listen_port)
+        http_server = WSGIServer((self.host, self.listen_port), self.app)
+        http_server.serve_forever()
 
     def stop_component(self):
         func = self.app.config.get("werkzeug.server.shutdown")
