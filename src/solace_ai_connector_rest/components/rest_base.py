@@ -74,14 +74,16 @@ class RestBase(ComponentBase):
         http_server.serve_forever()
 
     def stop_component(self):
-        func = self.app.config.get("werkzeug.server.shutdown")
-        if func is None:
-            raise RuntimeError("Not running with the Werkzeug Server")
-        func()
+        if hasattr(self, 'http_server'):
+            self.http_server.stop(timeout=10)
 
         # Clear the input queue
-        with self.input_queue.mutex:
-            self.input_queue.queue.clear()
+        if hasattr(self, 'input_queue') and self.input_queue is not None:
+            try:
+                with self.input_queue.mutex:
+                    self.input_queue.queue.clear()
+            except Exception as e:
+                print(f"Error clearing input queue: {e}")
 
     def get_next_event(self):
         message = self.input_queue.get()
