@@ -70,12 +70,15 @@ class RestBase(ComponentBase):
         self.register_routes()
 
     def run(self):
-        http_server = WSGIServer((self.host, self.listen_port), self.app)
-        http_server.serve_forever()
+        self.http_server = WSGIServer((self.host, self.listen_port), self.app)
+        self.http_server.serve_forever()
 
     def stop_component(self):
-        if hasattr(self, 'http_server'):
-            self.http_server.stop(timeout=10)
+        if hasattr(self, 'http_server') and self.http_server.started:
+            try:
+                self.http_server.stop(timeout=10)
+            except Exception as e:
+                print("Error stopping WebSocket server: %s", str(e))
 
         # Clear the input queue
         if hasattr(self, 'input_queue') and self.input_queue is not None:
