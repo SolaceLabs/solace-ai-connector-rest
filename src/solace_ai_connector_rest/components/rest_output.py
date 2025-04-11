@@ -72,6 +72,7 @@ class RestOutput(ComponentBase):
         first_chunk = content.get("first_chunk")
         status_update = content.get("status_update", False)
         server_input_id = message_info.get("server_input_id")
+        response_suspended = message_info.get("response_suspended", False)
 
         user_properties = message.get_user_properties()
         session_id = user_properties.get("session_id")
@@ -87,6 +88,12 @@ class RestOutput(ComponentBase):
             self.discard_current_message()
             return None
 
+        event_type = content.get("event_type", "")
+
+        if event_type == "get_pending_forms_response":
+            response_queue.put(content)
+            return data
+        
         if status_update:
             status_message = text
         else:
@@ -103,6 +110,7 @@ class RestOutput(ComponentBase):
                 "response_complete": response_complete,
                 "files": files,
                 "status_message": status_message,
+                "response_suspended": response_suspended,
             }
         )
 

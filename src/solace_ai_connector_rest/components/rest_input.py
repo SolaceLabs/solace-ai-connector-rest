@@ -14,6 +14,7 @@ from solace_ai_connector.common.log import log
 from .rest_base import RestBase, info as base_info
 from .utils import create_api_response, get_user_info
 from .openai_handlers import register_openai_routes
+from .user_forms_handler import UserFormsHandler
 
 # Clone and modify the info dictionary
 info = base_info.copy()
@@ -182,6 +183,10 @@ class RestInput(RestBase):
         self.authentication_enabled = self.authentication.get("enabled", False)
         if self.authentication_enabled:
             self.authentication_server = self.authentication.get("server")
+            
+        # Initialize and register user forms routes
+        user_forms_handler = UserFormsHandler(self)
+        user_forms_handler.register_routes()
 
         @self.app.route(self.endpoint, methods=["POST"])
         @sleep_and_retry
@@ -264,7 +269,7 @@ class RestInput(RestBase):
                 "session_id": session_id,
             }
 
-            # send the event to the cognitive mesh
+            # send the event to the solace agent mesh
             self.handle_event(server_input_id, event)
 
             # listen to the response queue and return the response
@@ -282,7 +287,7 @@ class RestInput(RestBase):
         if self.enable_openai_endpoint:
             register_openai_routes(self.app, self, self.rate_limit, self._rate_limit_time_period)
 
-    def handle_event(self, server_input_id: int, event: Dict[str, Any]) -> None:
+    def handle_event(self, server_input_id: str, event: Dict[str, Any]) -> None:
         payload = {
             "text": event.get("text", ""),
             "user_id": event.get("user_id", ""),
@@ -311,7 +316,7 @@ class RestInput(RestBase):
         log.debug(f"Sent event to cognitive mesh: {event}.")
 
     def generate_stream_response(
-        self, server_input_id: int, event: Dict[str, Any], response_queue: Queue
+        self, server_input_id: str, event: Dict[str, Any], response_queue: Queue
     ) -> Generator[str, None, None]:
         while not self.stop_signal.is_set():
             try:
@@ -326,7 +331,9 @@ class RestInput(RestBase):
                 "content": response.get("text", ""),
                 "status_message": response.get("status_message", None),
             }
-            
+            if response.get("response_suspended", False):
+                chunk["approval_required"] = True
+
             files = response.get("files", [])
             if files:
                 chunk["files"] = files
@@ -340,7 +347,7 @@ class RestInput(RestBase):
         yield "data: [DONE]\n\n"
 
     def generate_simple_response(
-        self, server_input_id: int, response_queue: Queue
+        self, server_input_id: str, response_queue: Queue
     ) -> Response:
         # TODO: add a timeout to the response queue
         files = []
