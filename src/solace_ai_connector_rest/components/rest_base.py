@@ -2,6 +2,7 @@ import queue
 from abc import abstractmethod
 from flask import Flask
 from flask_cors import CORS
+from gevent.pywsgi import WSGIServer
 from solace_ai_connector.components.component_base import ComponentBase
 from solace_ai_connector.common.message import Message
 from solace_ai_connector.common.event import Event, EventType
@@ -58,6 +59,7 @@ class RestBase(ComponentBase):
 
     def init_app(self):
         self.app = Flask(__name__)
+        self.app.env = 'production'
         CORS(self.app)
         
         # Add health check endpoint
@@ -68,17 +70,23 @@ class RestBase(ComponentBase):
         self.register_routes()
 
     def run(self):
-        self.app.run(host=self.host, port=self.listen_port)
+        self.http_server = WSGIServer((self.host, self.listen_port), self.app)
+        self.http_server.serve_forever()
 
     def stop_component(self):
-        func = self.app.config.get("werkzeug.server.shutdown")
-        if func is None:
-            raise RuntimeError("Not running with the Werkzeug Server")
-        func()
+        if hasattr(self, 'http_server') and self.http_server.started:
+            try:
+                self.http_server.stop(timeout=10)
+            except Exception as e:
+                print("Error stopping WebSocket server: %s", str(e))
 
         # Clear the input queue
-        with self.input_queue.mutex:
-            self.input_queue.queue.clear()
+        if hasattr(self, 'input_queue') and self.input_queue is not None:
+            try:
+                with self.input_queue.mutex:
+                    self.input_queue.queue.clear()
+            except Exception as e:
+                print(f"Error clearing input queue: {e}")
 
     def get_next_event(self):
         message = self.input_queue.get()
