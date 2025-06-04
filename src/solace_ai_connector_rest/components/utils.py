@@ -18,13 +18,14 @@ def create_api_response(data, status_code=200) -> tuple:
     return response
 
 
-def get_user_info(server_address, token_id):
+def get_user_info(server_address, token_id, local_dev):
     """
     Get user info from the authentication server.
 
     Args:
         server_address (str): The address of the authentication server.
         token_id (str): The bearer token.
+        local_dev (bool): Flag indicating if the local development environment is used.
 
     Returns:
         dict: The user info.
@@ -37,7 +38,7 @@ def get_user_info(server_address, token_id):
                 "Content-Type": "application/json",
             },
             timeout=10,
-            verify=False,
+            verify=not local_dev,  # Use verify=False for local development
         )
         if response.status_code != 200:
             return response.json(), response.status_code
@@ -46,7 +47,7 @@ def get_user_info(server_address, token_id):
                 f"{server_address}/user_info",
                 headers={"Authorization": f"Bearer {token_id}"},
                 timeout=10,
-                verify=False,
+                verify=not local_dev,  # Use verify=False for local development
             )
 
             if response.status_code == 200:

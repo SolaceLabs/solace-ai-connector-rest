@@ -168,6 +168,7 @@ class RestInput(RestBase):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.listen_port = self.get_config("listen_port", 5050)
+        self.local_dev = self.get_config("local_dev", True)
 
 
     def register_routes(self):
@@ -212,7 +213,7 @@ class RestInput(RestBase):
                 token_id = auth_header.split("Bearer ")[1]
 
                 # authenticate by the token
-                resp, status_code = get_user_info(self.authentication_server, token_id)
+                resp, status_code = get_user_info(self.authentication_server, token_id, self.local_dev)
                 log.debug(f"Authentication response code: {status_code}")
                 if status_code != 200:
                     return create_api_response(
