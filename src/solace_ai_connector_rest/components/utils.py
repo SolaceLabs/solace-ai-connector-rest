@@ -1,3 +1,4 @@
+import certifi
 import requests
 from flask import jsonify
 from solace_ai_connector.common.log import log
@@ -38,7 +39,7 @@ def get_user_info(server_address, token_id, local_dev):
                 "Content-Type": "application/json",
             },
             timeout=10,
-            verify=not local_dev,  # Use verify=False for local development
+            verify=certifi.where() if not local_dev else False
         )
         if response.status_code != 200:
             return response.json(), response.status_code
@@ -47,7 +48,7 @@ def get_user_info(server_address, token_id, local_dev):
                 f"{server_address}/user_info",
                 headers={"Authorization": f"Bearer {token_id}"},
                 timeout=10,
-                verify=not local_dev,  # Use verify=False for local development
+                verify=certifi.where() if not local_dev else False
             )
 
             if response.status_code == 200:
